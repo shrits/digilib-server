@@ -1,0 +1,155 @@
+// Prisma schema for Online Digital Library
+// Models: User, Book, Genre, BookGenre, Review, ReadingProgress, Bookmark, WishlistItem
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  MEMBER
+  ADMIN
+}
+
+model User {
+  id            String   @id @default(uuid())
+  name          String
+  email         String   @unique
+  passwordHash  String?  @map("password_hash")
+  oauthProvider String?  @map("oauth_provider")
+  oauthId       String?  @map("oauth_id")
+  role          Role     @default(MEMBER)
+  avatarUrl     String?  @map("avatar_url")
+  isActive      Boolean  @default(true) @map("is_active")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // Password reset
+  resetToken       String?   @map("reset_token")
+  resetTokenExpiry DateTime? @map("reset_token_expiry")
+
+  // Relations
+  booksAdded      Book[]            @relation("AdminBooks")
+  reviews         Review[]
+  readingProgress ReadingProgress[]
+  bookmarks       Bookmark[]
+  wishlistItems   WishlistItem[]
+
+  @@unique([oauthProvider, oauthId])
+  @@map("users")
+}
+
+model Book {
+  id            String   @id @default(uuid())
+  title         String
+  author        String
+  description   String?  @db.Text
+  isbn          String?
+  coverImageUrl String?  @map("cover_image_url")
+  fileUrlPdf    String?  @map("file_url_pdf")
+  fileUrlEpub   String?  @map("file_url_epub")
+  publisher     String?
+  publishedDate String?  @map("published_date")
+  pageCount     Int?     @map("page_count")
+  language      String?  @default("en")
+  readCount     Int      @default(0) @map("read_count")
+  downloadCount Int      @default(0) @map("download_count")
+
+  addedByAdminId String?  @map("added_by_admin_id")
+  addedByAdmin   User?    @relation("AdminBooks", fields: [addedByAdminId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  genres          BookGenre[]
+  reviews         Review[]
+  readingProgress ReadingProgress[]
+  bookmarks       Bookmark[]
+  wishlistItems   WishlistItem[]
+
+  @@map("books")
+}
+
+model Genre {
+  id   String @id @default(uuid())
+  name String @unique
+
+  books BookGenre[]
+
+  @@map("genres")
+}
+
+model BookGenre {
+  bookId  String @map("book_id")
+  genreId String @map("genre_id")
+
+  book  Book  @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  genre Genre @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@id([bookId, genreId])
+  @@map("book_genres")
+}
+
+model Review {
+  id        String   @id @default(uuid())
+  rating    Int // 1-5
+  comment   String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  userId String @map("user_id")
+  bookId String @map("book_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book   Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bookId])
+  @@map("reviews")
+}
+
+model ReadingProgress {
+  id              String   @id @default(uuid())
+  format          String // "pdf" or "epub"
+  percentComplete Float    @default(0) @map("percent_complete")
+  lastLocation    String?  @map("last_location") // page number (PDF) or CFI (EPUB)
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  userId String @map("user_id")
+  bookId String @map("book_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book   Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bookId])
+  @@map("reading_progress")
+}
+
+model Bookmark {
+  id        String   @id @default(uuid())
+  location  String // page number or CFI
+  note      String?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  userId String @map("user_id")
+  bookId String @map("book_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book   Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@map("bookmarks")
+}
+
+model WishlistItem {
+  id      String   @id @default(uuid())
+  addedAt DateTime @default(now()) @map("added_at")
+
+  userId String @map("user_id")
+  bookId String @map("book_id")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book   Book   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bookId])
+  @@map("wishlist_items")
+}
