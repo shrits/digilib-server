@@ -46,7 +46,7 @@ async function searchGoogleBooks({ title, isbn }) {
   const params = { q: query, maxResults: 10 };
   if (GOOGLE_BOOKS_API_KEY) params.key = GOOGLE_BOOKS_API_KEY;
 
-  const { data } = await axios.get('https://www.googleapis.com/books/v1/volumes', { params });
+  const { data } = await axios.get('https://www.googleapis.com/books/v1/volumes', { params, timeout: 5000 });
 
   if (!data.items || data.items.length === 0) return [];
 
@@ -78,7 +78,10 @@ async function searchOpenLibrary({ title, isbn }) {
   let url = '';
   if (isbn) {
     url = `https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`;
-    const { data } = await axios.get(url);
+    const { data } = await axios.get(url, { 
+      timeout: 5000,
+      headers: { 'User-Agent': 'Digilib-Import-Script/1.0 (shrits@example.com)' }
+    });
     const key = `ISBN:${isbn}`;
     if (!data[key]) return [];
 
@@ -102,7 +105,10 @@ async function searchOpenLibrary({ title, isbn }) {
 
   if (title) {
     url = `https://openlibrary.org/search.json?title=${encodeURIComponent(title)}&limit=10`;
-    const { data } = await axios.get(url);
+    const { data } = await axios.get(url, { 
+      timeout: 5000,
+      headers: { 'User-Agent': 'Digilib-Import-Script/1.0 (shrits@example.com)' }
+    });
 
     if (!data.docs || data.docs.length === 0) return [];
 
