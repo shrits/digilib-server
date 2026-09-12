@@ -1,6 +1,6 @@
 import prisma from '../config/db.js';
 import { validate, bookSchema } from '../utils/validation.js';
-import { uploadFile, deleteFile, getSignedUrl, getLocalPath } from '../services/storage.js';
+import { uploadFile, deleteFile, getSignedUrl, getLocalPath, getFileStream } from '../services/storage.js';
 import { lookupMetadata } from '../services/metadataLookup.js';
 import { createError } from '../middleware/errorHandler.js';
 import fs from 'fs';
@@ -203,13 +203,16 @@ export async function createBook(req, res, next) {
     let coverImageUrl = data.coverImageUrl;
 
     if (req.files?.pdfFile?.[0]) {
-      fileUrlPdf = await uploadFile(req.files.pdfFile[0].path, 'books');
+      const f = req.files.pdfFile[0];
+      fileUrlPdf = f.key ? f.key : await uploadFile(f.path, 'books');
     }
     if (req.files?.epubFile?.[0]) {
-      fileUrlEpub = await uploadFile(req.files.epubFile[0].path, 'books');
+      const f = req.files.epubFile[0];
+      fileUrlEpub = f.key ? f.key : await uploadFile(f.path, 'books');
     }
     if (req.files?.coverImage?.[0]) {
-      coverImageUrl = await uploadFile(req.files.coverImage[0].path, 'covers');
+      const f = req.files.coverImage[0];
+      coverImageUrl = f.key ? `/uploads/${f.key}` : await uploadFile(f.path, 'covers');
     }
 
     if (!fileUrlPdf && !fileUrlEpub) {
@@ -268,14 +271,18 @@ export async function updateBook(req, res, next) {
 
     if (req.files?.pdfFile?.[0]) {
       if (existing.fileUrlPdf) await deleteFile(existing.fileUrlPdf);
-      fileUrlPdf = await uploadFile(req.files.pdfFile[0].path, 'books');
+      const f = req.files.pdfFile[0];
+      fileUrlPdf = f.key ? f.key : await uploadFile(f.path, 'books');
     }
     if (req.files?.epubFile?.[0]) {
       if (existing.fileUrlEpub) await deleteFile(existing.fileUrlEpub);
-      fileUrlEpub = await uploadFile(req.files.epubFile[0].path, 'books');
+      const f = req.files.epubFile[0];
+      fileUrlEpub = f.key ? f.key : await uploadFile(f.path, 'books');
     }
     if (req.files?.coverImage?.[0]) {
-      coverImageUrl = await uploadFile(req.files.coverImage[0].path, 'covers');
+      if (existing.coverImageUrl && existing.coverImageUrl.startsWith('/uploads')) await deleteFile(existing.coverImageUrl);
+      const f = req.files.coverImage[0];
+      coverImageUrl = f.key ? `/uploads/${f.key}` : await uploadFile(f.path, 'covers');
     }
 
     const { genreIds, ...bookData } = metadata;
@@ -357,21 +364,12 @@ export async function readBook(req, res, next) {
       data: { readCount: { increment: 1 } },
     });
 
-    // For local storage, stream the file
-    if (process.env.FILE_STORAGE_PROVIDER === 'local' || !process.env.FILE_STORAGE_PROVIDER) {
-      const filePath = getLocalPath(fileUrl);
-      if (!fs.existsSync(filePath)) {
-        throw createError(404, 'File not found on disk');
-      }
-
-      const contentType = format === 'epub' ? 'application/epub+zip' : 'application/pdf';
-      res.setHeader('Content-Type', contentType);
-      res.setHeader('Content-Disposition', `inline; filename="${book.title}.${format}"`);
-      fs.createReadStream(filePath).pipe(res);
-    } else {
-      const signedUrl = await getSignedUrl(fileUrl);
-      res.redirect(signedUrl);
-    }
+    const contentType = format === 'epub' ? 'application/epub+zip' : 'application/pdf';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `inline; filename="${book.title}.${format}"`);
+    
+    const stream = await getFileStream(fileUrl);
+    stream.pipe(res);
   } catch (err) {
     next(err);
   }
@@ -394,20 +392,12 @@ export async function downloadBook(req, res, next) {
       data: { downloadCount: { increment: 1 } },
     });
 
-    if (process.env.FILE_STORAGE_PROVIDER === 'local' || !process.env.FILE_STORAGE_PROVIDER) {
-      const filePath = getLocalPath(fileUrl);
-      if (!fs.existsSync(filePath)) {
-        throw createError(404, 'File not found on disk');
-      }
-
-      const contentType = format === 'epub' ? 'application/epub+zip' : 'application/pdf';
-      res.setHeader('Content-Type', contentType);
-      res.setHeader('Content-Disposition', `attachment; filename="${book.title}.${format}"`);
-      fs.createReadStream(filePath).pipe(res);
-    } else {
-      const signedUrl = await getSignedUrl(fileUrl);
-      res.json({ downloadUrl: signedUrl });
-    }
+    const contentType = format === 'epub' ? 'application/epub+zip' : 'application/pdf';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `attachment; filename="${book.title}.${format}"`);
+    
+    const stream = await getFileStream(fileUrl);
+    stream.pipe(res);
   } catch (err) {
     next(err);
   }

@@ -6,6 +6,7 @@ import cookieParser from 'cookie-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import passport, { configurePassport } from './config/passport.js';
+import { getFileStream } from './services/storage.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { apiLimiter } from './middleware/rateLimiter.js';
 
@@ -40,10 +41,19 @@ app.use(apiLimiter);
 configurePassport();
 app.use(passport.initialize());
 
-// Serve uploaded files in development
-if (process.env.FILE_STORAGE_PROVIDER === 'local' || !process.env.FILE_STORAGE_PROVIDER) {
-  app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
-}
+// Serve uploaded files via backend stream (Local or S3)
+app.get('/uploads/*', async (req, res, next) => {
+  try {
+    const fileIdentifier = process.env.FILE_STORAGE_PROVIDER === 's3' 
+      ? req.params[0] 
+      : req.path; // e.g. "/uploads/covers/123.jpg"
+      
+    const stream = await getFileStream(fileIdentifier);
+    stream.pipe(res);
+  } catch (err) {
+    res.status(404).send('File not found');
+  }
+});
 
 // ─── API Routes ─────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
