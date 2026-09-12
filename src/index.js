@@ -5,7 +5,6 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import passport, { configurePassport } from './config/passport.js';
 import { getFileStream } from './services/storage.js';
 import { errorHandler } from './middleware/errorHandler.js';
 import { apiLimiter } from './middleware/rateLimiter.js';
@@ -37,11 +36,7 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(apiLimiter);
 
-// Passport initialization
-configurePassport();
-app.use(passport.initialize());
-
-// Serve uploaded files via backend stream (Local or S3)
+// ─── Serve uploaded files via backend stream (Local or S3) ────────────────
 app.get('/uploads/*', async (req, res, next) => {
   try {
     const fileIdentifier = process.env.FILE_STORAGE_PROVIDER === 's3' 
@@ -49,6 +44,10 @@ app.get('/uploads/*', async (req, res, next) => {
       : req.path; // e.g. "/uploads/covers/123.jpg"
       
     const stream = await getFileStream(fileIdentifier);
+    stream.on('error', (err) => {
+      console.error(`Stream error for ${fileIdentifier}:`, err.message);
+      if (!res.headersSent) res.status(404).send('File not found');
+    });
     stream.pipe(res);
   } catch (err) {
     res.status(404).send('File not found');

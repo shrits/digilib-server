@@ -369,6 +369,10 @@ export async function readBook(req, res, next) {
     res.setHeader('Content-Disposition', `inline; filename="${book.title}.${format}"`);
     
     const stream = await getFileStream(fileUrl);
+    stream.on('error', (err) => {
+      console.error(`Stream error for ${fileUrl}:`, err.message);
+      if (!res.headersSent) res.status(404).send('File not found');
+    });
     stream.pipe(res);
   } catch (err) {
     next(err);
@@ -397,6 +401,10 @@ export async function downloadBook(req, res, next) {
     res.setHeader('Content-Disposition', `attachment; filename="${book.title}.${format}"`);
     
     const stream = await getFileStream(fileUrl);
+    stream.on('error', (err) => {
+      console.error(`Stream error for ${fileUrl}:`, err.message);
+      if (!res.headersSent) res.status(404).send('File not found');
+    });
     stream.pipe(res);
   } catch (err) {
     next(err);

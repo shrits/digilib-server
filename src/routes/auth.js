@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import passport from '../config/passport.js';
 import { authenticate } from '../middleware/auth.js';
 import { authLimiter } from '../middleware/rateLimiter.js';
 import {
@@ -11,7 +10,6 @@ import {
   resetPassword,
   updateProfile,
   changePassword,
-  googleCallback,
 } from '../controllers/auth.js';
 
 const router = Router();
@@ -27,16 +25,5 @@ router.post('/reset-password', authLimiter, resetPassword);
 router.get('/me', authenticate, getMe);
 router.put('/profile', authenticate, updateProfile);
 router.put('/change-password', authenticate, changePassword);
-
-// Google OAuth routes
-router.get(
-  '/google',
-  passport.authenticate('google', { scope: ['profile', 'email'], session: false })
-);
-router.get(
-  '/google/callback',
-  passport.authenticate('google', { session: false, failureRedirect: '/login?error=oauth_failed' }),
-  googleCallback
-);
 
 export default router;
