@@ -35,10 +35,15 @@ export function verifyRefreshToken(token) {
  * Cookie options for auth tokens.
  */
 export function cookieOptions(maxAgeMs) {
+  const isProduction = process.env.NODE_ENV === 'production';
+  // If frontend and backend are on different origins, use 'none' to allow cross-origin cookies
+  const isCrossOrigin = isProduction && process.env.FRONTEND_URL && 
+    new URL(process.env.FRONTEND_URL).origin !== `http://localhost:${process.env.PORT || 3001}`;
+  
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+    secure: isProduction,
+    sameSite: isCrossOrigin ? 'none' : 'lax',
     maxAge: maxAgeMs,
     path: '/',
   };
